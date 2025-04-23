@@ -7,4 +7,7 @@ fun Route.root(){
     route("user"){
         userRoute()
     }
+    route("auth"){
+        authRoute()
+    }
 }

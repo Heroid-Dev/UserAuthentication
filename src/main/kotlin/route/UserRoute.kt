@@ -4,16 +4,15 @@ import com.example.model.local.User
 import com.example.model.request.LoginRequest
 import com.example.model.response.UserResponse
 import com.example.repository.UserRepository
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.request.receive
-import io.ktor.server.response.respond
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.application
-import io.ktor.server.routing.delete
-import io.ktor.server.routing.get
-import io.ktor.server.routing.post
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import org.koin.ktor.ext.getKoin
-import java.util.UUID
+import java.util.*
 
 fun Route.userRoute() {
     val userRepository = application.getKoin().get<UserRepository>()
@@ -50,21 +49,27 @@ fun Route.userRoute() {
         }
     }
 
-    get("get") {
-        val id = call.request.queryParameters["id"] ?: return@get call.respond(
-            message = "No id",
-            status = HttpStatusCode.BadRequest
-        )
-        return@get userRepository.getUserById(id)?.let { user ->
-            call.respond(
-                message = user.toResponse(),
-                status = HttpStatusCode.OK
+    authenticate {
+        get("get") {
+            val id = call.request.queryParameters["id"] ?: return@get call.respond(
+                message = "No id",
+                status = HttpStatusCode.BadRequest
             )
-        } ?: call.respond(
-            message = "User not found",
-            status = HttpStatusCode.NotFound
-        )
+            return@get userRepository.getUserById(id)?.let { user ->
+                if (!validityUser(call, user)) {
+                    call.respond(HttpStatusCode.Unauthorized)
+                }
+                call.respond(
+                    message = user.toResponse(),
+                    status = HttpStatusCode.OK
+                )
+            } ?: call.respond(
+                message = "User not found",
+                status = HttpStatusCode.NotFound
+            )
+        }
     }
+
     delete("all") {
         return@delete userRepository.deleteAllUsers().let {
             if (it) {
@@ -80,6 +85,22 @@ fun Route.userRoute() {
             }
         }
     }
+}
+
+private fun validityUser(call: ApplicationCall, user: User): Boolean {
+    val username = call
+        .principal<JWTPrincipal>()
+        ?.payload
+        ?.getClaim("username")
+        ?.asString() ?: return false
+
+    val password = call
+        .principal<JWTPrincipal>()
+        ?.payload
+        ?.getClaim("password")
+        ?.asString() ?: return false
+
+    return user.password == password && user.username == username
 }
 
 private fun LoginRequest.toMode(): User =
