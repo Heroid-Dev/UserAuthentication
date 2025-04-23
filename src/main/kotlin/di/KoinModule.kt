@@ -8,7 +8,7 @@ import org.koin.dsl.module
 
 val koinModule = { application: Application ->
     module {
-        single {
+        factory {
             UserDatabase()
         }
         factory<UserRepository> {
