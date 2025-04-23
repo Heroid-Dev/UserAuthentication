@@ -1,5 +1,6 @@
 package com.example.di
 
+import com.example.repository.TokenDatabase
 import com.example.repository.UserDatabase
 import com.example.repository.UserRepository
 import com.example.repository.UserRepositoryImpl
@@ -12,11 +13,17 @@ val koinModule = { application: Application ->
         factory {
             UserDatabase()
         }
-        factory<UserRepository> {
-            UserRepositoryImpl(get<UserDatabase>())
+        factory {
+            JwtService(application, get<UserDatabase>())
         }
         factory {
-            JwtService(application, get<UserRepository>())
+            TokenDatabase()
+        }
+        factory<UserRepository> {
+            UserRepositoryImpl(
+                get<UserDatabase>(),
+                get<TokenDatabase>(),
+                get<JwtService>())
         }
     }
 }

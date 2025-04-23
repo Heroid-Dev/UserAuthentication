@@ -3,15 +3,14 @@ package com.example.security
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTVerifier
 import com.auth0.jwt.algorithms.Algorithm
-import com.example.model.request.LoginRequest
-import com.example.repository.UserRepository
+import com.example.repository.UserDatabase
 import io.ktor.server.application.*
 import io.ktor.server.auth.jwt.*
 import java.sql.Date
 
 class JwtService(
     private val application: Application,
-    private val userRepository: UserRepository
+    private val db: UserDatabase
 ) {
     private val audience = getConfigProperties("jwt.audience")
     private val issuer = getConfigProperties("jwt.issuer")
@@ -29,24 +28,30 @@ class JwtService(
             .withIssuer(issuer)
             .build()
 
-    suspend fun createJwtToken(loginRequest: LoginRequest): String? {
-        val foundedUser = userRepository.getUserByUsername(loginRequest.username) ?: return null
-        return if (foundedUser.password == loginRequest.password) {
-            JWT
-                .create()
-                .withAudience(audience)
-                .withIssuer(issuer)
-                .withClaim("username", foundedUser.username)
-                .withClaim("password", foundedUser.password)
-                .withExpiresAt(Date(System.currentTimeMillis() + 3_600_000))
-                .sign(Algorithm.HMAC256(secret))
-        } else null
-    }
+    fun createAccessToken(username: String, password: String): String =
+        createJwtToken(username, password, 3_600_000)
+
+    fun createRefreshToken(username: String, password: String): String =
+        createJwtToken(username, password, 86_400_000)
+
+    fun audienceMatchByRefresh(audience: String): Boolean =
+        this.audience == audience
+
+    private fun createJwtToken(username: String, password: String, expireIn: Long): String =
+        JWT
+            .create()
+            .withAudience(audience)
+            .withIssuer(issuer)
+            .withClaim("username", username)
+            .withClaim("password", password)
+            .withExpiresAt(Date(System.currentTimeMillis() + expireIn))
+            .sign(Algorithm.HMAC256(secret))
+
 
     suspend fun customValidator(credential: JWTCredential): JWTPrincipal? {
         val username = credential.payload.getClaim("username").asString()
         val password = credential.payload.getClaim("password").asString()
-        val foundedUser = userRepository.getUserByUsername(username) ?: return null
+        val foundedUser = db.getUserByUsername(username) ?: return null
         return if (foundedUser.password == password) {
             if (matchAudience(credential)) {
                 JWTPrincipal(credential.payload)

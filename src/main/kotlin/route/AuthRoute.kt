@@ -1,7 +1,8 @@
 package com.example.route
 
 import com.example.model.request.LoginRequest
-import com.example.security.JwtService
+import com.example.model.request.RefreshRequest
+import com.example.repository.UserRepository
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
@@ -9,11 +10,17 @@ import io.ktor.server.routing.*
 import org.koin.ktor.ext.getKoin
 
 fun Route.authRoute() {
-    val jwtService = application.getKoin().get<JwtService>()
+    val userRepository = application.getKoin().get<UserRepository>()
     post("login") {
         val loginRequest = call.receive<LoginRequest>()
-        return@post jwtService.createJwtToken(loginRequest)?.let { accessToken ->
-            call.respond(message = hashMapOf("token" to accessToken))
+        return@post userRepository.authenticate(loginRequest)?.let {
+            call.respond(it)
+        } ?: call.respond(HttpStatusCode.Unauthorized)
+    }
+    post("refresh") {
+        val refreshRequest = call.receive<RefreshRequest>()
+        return@post userRepository.refresh(refreshRequest.refreshToken)?.let {
+            call.respond(it)
         } ?: call.respond(HttpStatusCode.Unauthorized)
     }
 }
